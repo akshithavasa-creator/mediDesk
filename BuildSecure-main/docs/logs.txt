@@ -76,3 +76,39 @@ Actions Taken:
 * write_file (api-client.ts, tsconfig.json); moved files from session-cwd into repo src/
 * str_replace x3 (query interface index signatures)
 * npx -p typescript@5 tsc --noEmit -> EXIT=0 (after fixing 4 TS2322 errors)
+================================================================================
+2026-10-06T09:40:00+05:30 Cookie-based auth refactor in api-client (no pages exist)
+================================================================================
+User Prompt (verbatim):
+The backend authentication is now implemented and uses an HTTP-only medidesk_session cookie with server-side Prisma sessions. IMPORTANT SECURITY CHANGE: Do NOT use localStorage bearer-token authentication. Update api-client.ts so authentication relies on the browser's HTTP-only session cookie using fetch credentials: "include". Remove/disable: setAuthToken, getAuthToken, localStorage token persistence, Authorization: Bearer token for our MediDesk session. Keep the typed API functions. Then inspect the actual MediDesk frontend pages available in the branch/repository and connect the login/register/logout flow to: POST /api/auth/register, POST /api/auth/login, POST /api/auth/logout, GET /api/auth/me. Preserve the existing UI. Do NOT create fake API responses. Run: npx tsc --noEmit. Report all changes and commit them to the frontend branch.
+
+Agent Response:
+1) Refactored src/lib/api-client.ts to cookie-based auth: removed setAuthToken,
+getAuthToken, authToken state, medidesk.token localStorage persistence, the
+Authorization request option and the Bearer header. Every request already sends
+credentials: "include" (kept and documented) so the browser attaches the
+HTTP-only medidesk_session cookie. authApi.login/register now POST then read
+GET /api/auth/me for the canonical user (no assumed response body shape, no
+fake data); logout POSTs /api/auth/logout with no local state to clear. Typed
+API function groups unchanged. 2) Inspected branch/repository for frontend
+pages: remote origin/frontend == local HEAD (82cafec), only source file is
+src/lib/api-client.ts - no login/register pages, no package.json, no UI exists
+to connect or preserve (searched *.tsx/*.jsx/*.html, page/App/login/register
+files). Page wiring is therefore blocked until the UI code arrives; reported
+to user instead of inventing a UI.
+
+Agent Response Summary:
+Cookie-auth security change applied and typecheck clean (npx tsc --noEmit exit
+0); no frontend pages exist in the repository yet, so the login/register/logout
+UI connection could not be performed and was reported honestly.
+
+Commit SHA: ff5641e
+
+Files Modified / Created:
+* src/lib/api-client.ts (Modified)
+
+Actions Taken:
+* str_replace x5 on src/lib/api-client.ts (token removal, credentials docs, authApi rewrite)
+* grep verification: no functional setAuthToken/getAuthToken/Bearer/Authorization references remain
+* npx -p typescript@5 tsc --noEmit -> TSC_EXIT=0
+* git fetch + ls-remote + find for frontend pages (none found)
