@@ -28,3 +28,16 @@ Actions Taken:
 * list_directory / find / grep sweeps over repo + C:\Users\luck6 (package.json, page.tsx, next.config, *supabase*, *.tsx)
 * git fetch/ls-remote + GitHub API check of akshithavasa-creator/mediDesk (empty)
 * read AGENTS.md, PARTICIPANT_RULES.md, MediDesk_PDR.docx
+================================================================================
+2026-10-06T09:12:00+05:30 ONBOARDING COMPLETE
+================================================================================
+AGREEMENT RECORDED: C:\Users\luck6\Downloads\BuildSecure-main
+Agent: Buffy (Freebuff)
+System Time: 2026-10-06T09:12:00+05:30
+Deadline: 2026-10-06T11:00:00+05:30
+
+User selected: "I agree" (competition rules accepted) and "API client only"
+(create typed fetch functions for /api/*; no pages yet, no fake backend).
+
+Files Modified / Created:
+* BuildSecure-main/docs/logs.txt (Modified)
