@@ -13,7 +13,7 @@ export const metadata = {
 
 export default async function PatientDashboardPage() {
   const session = await requirePatient();
-  const { counts, upcomingAppointments, error } = await getPatientDashboardData(session.id);
+  const { counts, upcomingAppointments, error } = await getPatientDashboardData();
 
   return (
     <PatientLayout title="Dashboard">
