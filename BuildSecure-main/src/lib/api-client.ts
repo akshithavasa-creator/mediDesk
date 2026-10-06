@@ -7,6 +7,11 @@
  *
  * Notes:
  * - No Supabase, no Prisma, no server-only modules: this file runs in the browser.
+ * - Authentication relies on the backend's HTTP-only `medidesk_session` cookie.
+ *   Every request sends `credentials: "include"` so the browser attaches it;
+ *   there is no client-readable token, no Authorization header and nothing
+ *   session-related stored in localStorage (that would defeat HTTP-only cookie
+ *   security).
  * - Errors are thrown as `ApiError` (with HTTP status + server message) so pages
  *   can render real error states instead of fake data.
  * - Endpoints that the backend team has not shipped yet are declared here with
@@ -21,7 +26,6 @@
 const DEFAULT_BASE_URL = "/api";
 
 let baseUrl = readStoredBaseUrl() ?? DEFAULT_BASE_URL;
-let authToken: string | null = readStoredToken();
 
 /** Override the API base URL (e.g. `http://localhost:4000/api`). */
 export function setApiBaseUrl(url: string): void {
@@ -38,36 +42,9 @@ export function getApiBaseUrl(): string {
   return baseUrl;
 }
 
-/** Store the bearer token returned by login/register. */
-export function setAuthToken(token: string | null): void {
-  authToken = token;
-  try {
-    if (token) {
-      window.localStorage.setItem("medidesk.token", token);
-    } else {
-      window.localStorage.removeItem("medidesk.token");
-    }
-  } catch {
-    /* storage unavailable — keep in-memory value */
-  }
-}
-
-/** Current bearer token, or null when logged out. */
-export function getAuthToken(): string | null {
-  return authToken;
-}
-
 function readStoredBaseUrl(): string | null {
   try {
     return window.localStorage.getItem("medidesk.apiBaseUrl");
-  } catch {
-    return null;
-  }
-}
-
-function readStoredToken(): string | null {
-  try {
-    return window.localStorage.getItem("medidesk.token");
   } catch {
     return null;
   }
@@ -98,8 +75,6 @@ export interface RequestOptions {
   query?: Record<string, string | number | boolean | undefined | null>;
   /** Abort signal so pages can cancel in-flight loads on unmount. */
   signal?: AbortSignal;
-  /** Send the Authorization header (default: true when a token exists). */
-  auth?: boolean;
 }
 
 function buildUrl(path: string, query?: RequestOptions["query"]): string {
@@ -151,7 +126,6 @@ export async function apiRequest<T>(
     body,
     query,
     signal,
-    auth = true,
   } = options;
 
   const headers: Record<string, string> = {
@@ -160,9 +134,8 @@ export async function apiRequest<T>(
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
   }
-  if (auth && authToken) {
-    headers.Authorization = `Bearer ${authToken}`;
-  }
+  // No Authorization header: the HTTP-only medidesk_session cookie set by the
+  // backend is sent automatically because of `credentials: "include"` below.
 
   let response: Response;
   try {
@@ -304,53 +277,49 @@ export interface RegisterRequest {
   password: string;
 }
 
-export interface AuthResponse {
-  token: string;
-  user: User;
-}
-
 /* ------------------------------------------------------------------ */
 /* /api/auth/*                                                         */
+/*                                                                     */
+/* The backend establishes an HTTP-only `medidesk_session` cookie on    */
+/* register/login. The browser attaches it automatically to every      */
+/* request (credentials: "include"), so these functions never touch a  */
+/* token: after a successful POST they read the canonical session user */
+/* from GET /api/auth/me instead of assuming a response body shape.    */
 /* ------------------------------------------------------------------ */
 
 export const authApi = {
-  /** POST /api/auth/login — stores the returned token on success. */
-  async login(body: LoginRequest, options?: RequestOptions): Promise<AuthResponse> {
-    const res = await apiRequest<AuthResponse>("/auth/login", {
+  /** POST /api/auth/login — sets the session cookie, then returns the user. */
+  async login(body: LoginRequest, options?: RequestOptions): Promise<User> {
+    await apiRequest<unknown>("/auth/login", {
       ...options,
       method: "POST",
       body,
-      auth: false,
     });
-    if (res?.token) setAuthToken(res.token);
-    return res;
+    return authApi.me(options);
   },
 
-  /** POST /api/auth/register */
+  /** POST /api/auth/register — sets the session cookie, then returns the user. */
   async register(
     body: RegisterRequest,
     options?: RequestOptions,
-  ): Promise<AuthResponse> {
-    const res = await apiRequest<AuthResponse>("/auth/register", {
+  ): Promise<User> {
+    await apiRequest<unknown>("/auth/register", {
       ...options,
       method: "POST",
       body,
-      auth: false,
     });
-    if (res?.token) setAuthToken(res.token);
-    return res;
+    return authApi.me(options);
   },
 
-  /** POST /api/auth/logout — clears the local token even if the call fails. */
+  /** POST /api/auth/logout — invalidates the server-side session cookie. */
   async logout(options?: RequestOptions): Promise<void> {
-    try {
-      await apiRequest<void>("/auth/logout", { ...options, method: "POST" });
-    } finally {
-      setAuthToken(null);
-    }
+    await apiRequest<void>("/auth/logout", { ...options, method: "POST" });
   },
 
-  /** GET /api/auth/me — current session user (role-based redirect source). */
+  /**
+   * GET /api/auth/me — current session user (role-based redirect source).
+   * Throws `ApiError` with status 401 when there is no valid session cookie.
+   */
   me(options?: RequestOptions): Promise<User> {
     return apiRequest<User>("/auth/me", options);
   },
