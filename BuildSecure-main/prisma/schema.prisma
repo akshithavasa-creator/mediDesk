@@ -1,0 +1,181 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Role {
+  PATIENT
+  DOCTOR
+  ADMIN
+}
+
+enum AppointmentStatus {
+  BOOKED
+  COMPLETED
+  CANCELLED
+}
+
+enum ConsentType {
+  PRIVACY_NOTICE
+  TERMS
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model User {
+  id           String          @id @default(uuid())
+  email        String          @unique
+  passwordHash String
+  role         Role            @default(PATIENT)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  patientProfile PatientProfile?
+  doctorProfile  DoctorProfile?
+  sessions       Session[]
+  auditLogs      AuditLog[]
+  consents       ConsentRecord[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model PatientProfile {
+  id                   String   @id @default(uuid())
+  userId               String   @unique
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName            String
+  lastName             String
+  dateOfBirth          DateTime
+  phone                String?
+  address              String?
+  emergencyContact     String?
+  emergencyPhone       String?
+  bloodType            String?
+  allergies            String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  medicalRecords       MedicalRecord[]
+  appointments         Appointment[] @relation("PatientAppointments")
+
+  @@index([userId])
+}
+
+model DoctorProfile {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName     String
+  lastName      String
+  specialty     String
+  licenseNumber String   @unique
+  hospital      String?
+  bio           String?
+  consultationFee Decimal  @default(0)
+  available     Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  appointments  Appointment[] @relation("DoctorAppointments")
+
+  @@index([userId])
+  @@index([specialty])
+}
+
+model Session {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token       String   @unique
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+model Appointment {
+  id              String            @id @default(uuid())
+  patientId       String
+  patient         PatientProfile    @relation("PatientAppointments", fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId        String
+  doctor          DoctorProfile     @relation("DoctorAppointments", fields: [doctorId], references: [id], onDelete: Cascade)
+  scheduledAt     DateTime
+  duration        Int               @default(30)
+  status          AppointmentStatus @default(BOOKED)
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([scheduledAt])
+  @@index([status])
+}
+
+model MedicalRecord {
+  id             String      @id @default(uuid())
+  patientId      String
+  patient        PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId       String?
+  diagnosis      String?
+  treatment      String?
+  notes          String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([patientId])
+  @@index([doctorId])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action     String
+  resource   String?
+  details    String?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model RateLimit {
+  id        String   @id @default(uuid())
+  identifier String   @unique
+  count     Int      @default(1)
+  windowStart DateTime @default(now())
+  windowEnd   DateTime
+
+  @@index([identifier])
+  @@index([windowEnd])
+}
+
+model ConsentRecord {
+  id          String      @id @default(uuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        ConsentType
+  acceptedAt  DateTime    @default(now())
+  ipAddress   String?
+
+  @@unique([userId, type])
+  @@index([userId])
+  @@index([type])
+}

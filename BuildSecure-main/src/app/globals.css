@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --teal-50: #f0fdfa;
+  --teal-500: #14b8a6;
+  --teal-700: #0f766e;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  border-color: theme("colors.zinc.200");
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+input,
+textarea,
+button,
+select {
+  font-family: inherit;
+}
+
+a,
+button {
+  color-scheme: light;
+}
+
+::selection {
+  background-color: var(--teal-100);
+  color: var(--teal-900);
+}
