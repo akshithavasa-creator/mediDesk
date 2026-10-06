@@ -215,6 +215,8 @@ export interface PatientProfile {
   address?: string | null;
   emergencyContactName?: string | null;
   emergencyContactPhone?: string | null;
+  /** Optional clinical field rendered by the profile form. */
+  allergies?: string | null;
 }
 
 export interface Patient extends User {
@@ -457,10 +459,15 @@ export const appointmentsApi = {
 /* ------------------------------------------------------------------ */
 
 export interface UpdateProfileRequest {
+  /** Display name (kept on the user record by the backend). */
+  fullName?: string;
+  /** Contact phone (kept on the user record by the backend). */
+  phone?: string | null;
   dateOfBirth?: string | null;
   gender?: string | null;
   bloodGroup?: string | null;
   address?: string | null;
+  allergies?: string | null;
   emergencyContactName?: string | null;
   emergencyContactPhone?: string | null;
 }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { authApi, ApiError } from "@/lib/api-client";
 import { listActiveDoctors, loadAvailableSlots, bookAppointment } from "@/lib/bookings-browser";
 import type { DoctorWithProfile } from "@/lib/bookings-browser";
 import type { BookingSlot, BookingResult } from "@/types/bookings";
@@ -13,11 +13,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertCircle, BookOpen, Calendar, Clock, CheckCircle, ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 
-const reasonSchema = z
-  .string()
-  .max(200, "Reason must be 200 characters or fewer")
-  .optional()
-  .default("");
+const reasonSchema = z.object({
+  reason: z.string().max(200, "Reason must be 200 characters or fewer"),
+});
 
 type ReasonFormValues = { reason: string };
 
@@ -32,7 +30,6 @@ type BookingStep =
 
 export default function BookAppointmentPage() {
   const router = useRouter();
-  const supabase = createClient();
   const [step, setStep] = useState<BookingStep>({ step: "choose_doctor" });
   const [doctors, setDoctors] = useState<DoctorWithProfile[]>([]);
   const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null);
@@ -60,6 +57,12 @@ export default function BookAppointmentPage() {
     try {
       const result = await listActiveDoctors();
       setDoctors(result);
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Could not reach the server. Please try again.",
+      );
     } finally {
       setLoading(false);
     }
@@ -109,7 +112,23 @@ export default function BookAppointmentPage() {
   async function submitBooking() {
     const values = reasonForm.getValues();
 
-    const userId = (await supabase.auth.getUser()).data.user?.id ?? "";
+    let userId = "";
+    try {
+      const user = await authApi.me();
+      userId = user.id;
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        userId = "";
+      } else {
+        const message =
+          err instanceof ApiError
+            ? err.message
+            : "Could not reach the server. Please try again.";
+        setError(message);
+        setStep({ step: "error", message });
+        return;
+      }
+    }
     const doctorId = selectedDoctorId;
     const slot = selectedSlot;
 

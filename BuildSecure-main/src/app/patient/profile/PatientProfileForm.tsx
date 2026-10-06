@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { patientsApi, ApiError } from "@/lib/api-client";
 import { useToast } from "@/components/Toast";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -55,7 +55,6 @@ interface PatientProfileFormProps {
 
 export function PatientProfileForm({ userId, initialName }: PatientProfileFormProps) {
   const router = useRouter();
-  const supabase = createClient();
   const { addToast } = useToast();
 
   const [isLoading, setIsLoading] = useState(true);
@@ -89,49 +88,29 @@ export function PatientProfileForm({ userId, initialName }: PatientProfileFormPr
     let cancelled = false;
 
     async function loadProfile() {
-      const { data, error } = await supabase
-        .from("patient_profiles")
-        .select(
-          `
-          date_of_birth,
-          blood_type,
-          allergies,
-          emergency_contact_name,
-          emergency_contact_phone
-        `,
-        )
-        .eq("profile_id", userId)
-        .select(
-        `
-        date_of_birth,
-        blood_type,
-        allergies,
-        emergency_contact_name,
-        emergency_contact_phone
-      `,
-      )
-      .maybeSingle<Database["public"]["Tables"]["patient_profiles"]["Row"]>();
+      try {
+        const patient = await patientsApi.getMyProfile();
+        if (cancelled) return;
 
-      if (!cancelled) {
-        if (error && error.code !== "PGRST116") {
+        const prof = patient.profile ?? null;
+        setProfile({
+          dateOfBirth: prof?.dateOfBirth ?? null,
+          phone: patient.phone ?? null,
+          allergies: prof?.allergies ?? null,
+          emergencyContactName: prof?.emergencyContactName ?? null,
+          emergencyContactPhone: prof?.emergencyContactPhone ?? null,
+        });
+        reset({
+          fullName: patient.name || initialName,
+          dob: prof?.dateOfBirth ?? "",
+          phone: patient.phone ?? "",
+          allergies: prof?.allergies ?? "",
+          emergencyContactName: prof?.emergencyContactName ?? "",
+          emergencyContactPhone: prof?.emergencyContactPhone ?? "",
+        });
+      } catch {
+        if (!cancelled) {
           addToast("Could not load your profile", "error");
-        } else if (data) {
-          setProfile({
-            dateOfBirth: data.date_of_birth,
-            phone: null,
-            allergies: data.allergies,
-            emergencyContactName: data.emergency_contact_name,
-            emergencyContactPhone: data.emergency_contact_phone,
-          });
-          reset({
-            fullName: initialName,
-            dob: data.date_of_birth ?? "",
-            phone: "",
-            allergies: data.allergies ?? "",
-            emergencyContactName: data.emergency_contact_name ?? "",
-            emergencyContactPhone: data.emergency_contact_phone ?? "",
-          });
-        } else {
           reset({
             fullName: initialName,
             dob: "",
@@ -141,7 +120,8 @@ export function PatientProfileForm({ userId, initialName }: PatientProfileFormPr
             emergencyContactPhone: "",
           });
         }
-        setIsLoading(false);
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
     }
 
@@ -149,37 +129,19 @@ export function PatientProfileForm({ userId, initialName }: PatientProfileFormPr
     return () => {
       cancelled = true;
     };
-  }, [userId, supabase, initialName, reset, addToast]);
+  }, [initialName, reset, addToast]);
 
   async function onSubmit(values: PatientProfileFormValues) {
     setIsSaving(true);
     try {
-      const { error } = await supabase.from("profiles").update({
-        full_name: values.fullName,
-      }).eq("id", userId);
-
-      if (error) {
-        throw new Error("Could not update your name");
-      }
-
-      const { error: profileError } = await supabase
-        .from("patient_profiles")
-        .upsert(
-          {
-            profile_id: userId,
-            date_of_birth: values.dob,
-            allergies: values.allergies,
-            emergency_contact_name: values.emergencyContactName,
-            emergency_contact_phone: values.emergencyContactPhone,
-          },
-          {
-            onConflict: "profile_id",
-          },
-        );
-
-      if (profileError) {
-        throw new Error("Could not save your profile");
-      }
+      await patientsApi.updateMyProfile({
+        fullName: values.fullName,
+        dateOfBirth: values.dob ?? null,
+        phone: values.phone ?? null,
+        allergies: values.allergies ?? null,
+        emergencyContactName: values.emergencyContactName ?? null,
+        emergencyContactPhone: values.emergencyContactPhone ?? null,
+      });
 
       setProfile({
         dateOfBirth: values.dob ?? null,
@@ -193,7 +155,11 @@ export function PatientProfileForm({ userId, initialName }: PatientProfileFormPr
       router.refresh();
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "Could not save your profile";
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Could not save your profile";
       addToast(message, "error");
     } finally {
       setIsSaving(false);
